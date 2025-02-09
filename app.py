@@ -33,21 +33,23 @@ def read_prompt(prompt: str, gender: str):
             """, unsafe_allow_html=True)
 
 # Create a sticky container for the header
-header_container = st.container()
-with header_container:
-    # Title
-    st.title("Rizz the AI 💕😨")
-    st.subheader("In 10 prompts, get to the highest rizz score possible!")
-
+# Create two main columns for the entire page layout
+# Title
+st.title("Rizz the AI 💕😨")
+st.subheader("In 10 prompts, get to the highest rizz score possible!")
+left_col, right_col = st.columns([1, 1])
+with right_col:
     col1, col2 = st.columns([4, 1])
     with col1:
         # Select profiles based on gender
         gender = st.pills("Choose AI Gender", ["Female", "Male", "Neutral"], default="Female", on_change=reset)
     with col2:
         # Reset chat
-        if st.button("Reset Chat"):
+        if st.button("↺"):
             reset()
-            st.rerun()
+            # st.rerun()
+with left_col:
+    st.image(f"./images/{gender}.png", width=180)
 
 # Gender-based character descriptions
 character_descriptions = {
@@ -70,26 +72,30 @@ if prompt := st.chat_input(disabled=(num_prompts==MAX_PROMPTS)):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar=None):
         st.markdown(prompt)
-    with st.chat_message("assistant", avatar=None):
+    with st.chat_message("assistant", avatar=f"./images/{gender}.png"):
         messages = [{"role": "developer", "content": character_descriptions[gender] + """
                     You will receive prompts from a person who is trying to romantically attract you and flirt with you.
                     Your task is to engage in an active conversation with the person, and respond in a way that is consistent with your character.
                     Feel free to make up a backstory about your persona.
                     You should also evaluate how successful the person is in their attempts to flirt with you, on a score from 0 to 10 (to 1 decimal place).
                     Ensure your responses do not exceed 50 words.
+                    Your first score should be 0.0. Each increment of the score from the previous prompt should not exceed 1.0.
                     In each response, you must start by returning the current score up to that point, for example, "[7.9] My name is Sophie."
                     """}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-        stream = client.chat.completions.create(
+        completion = client.chat.completions.create(
             model=st.session_state["openai_model"],
             messages=messages,
-            stream=True,
+            stream=False,
         )
-        response = st.write_stream(stream)
+        response = completion.choices[0].message.content
         read_prompt(response[response.index(']')+1:], gender)
+        st.write(response[response.index(']')+1:])
         
     st.session_state.messages.append({"role": "assistant", "content": response})
 
     # Extract score from the last assistant message if it exists
+    score = 0.0
+    num_prompts = 0
     if st.session_state.messages and any(m["role"] == "assistant" for m in st.session_state.messages):
         num_prompts = len([m for m in st.session_state.messages if m["role"] == "assistant"])
         last_response = next(m["content"] for m in reversed(st.session_state.messages) if m["role"] == "assistant")
@@ -116,9 +122,11 @@ if prompt := st.chat_input(disabled=(num_prompts==MAX_PROMPTS)):
                 </style>""",
                 unsafe_allow_html=True
             )
-            st.progress(score / 10, f"Current Rizz Score: {score}/10 | Prompts Left: {MAX_PROMPTS - num_prompts}/{MAX_PROMPTS}")
         except:
             st.progress(0, "Waiting for score...")
 
-    if len(st.session_state.messages) >= MAX_PROMPTS:
+    if num_prompts >= MAX_PROMPTS or score == 10.0:
+        st.info(f"Your Final Rizz Score is {score}! 😨😨😨 Start again!")
         st.stop()
+    else:
+        st.progress(score / 10, f"Current Rizz Score: {score}/10 | Prompts Left: {MAX_PROMPTS - num_prompts}/{MAX_PROMPTS}")
